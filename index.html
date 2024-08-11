@@ -1,0 +1,221 @@
+html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>シューティングゲーム</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #gameOver, #congratulations { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: white;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="gameOver">GAME OVER</div>
+    <div id="congratulations">Congratulations!!</div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height - 30,
+            width: 20,
+            height: 20,
+            speed: 5
+        };
+
+        let bullets = [];
+        let enemies = [];
+        let enemyBullets = [];
+        let stars = [];
+        let score = 0;
+        let enemiesDestroyed = 0;
+        let boss = null;
+        let gameIsOver = false;
+
+        function drawPlayer() {
+            ctx.fillStyle = 'lime';
+            ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = 'yellow';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x - 2, bullet.y - 8, 4, 8);
+            });
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = 'red';
+            enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x - 10, enemy.y - 10, 20, 20);
+            });
+        }
+
+        function drawEnemyBullets() {
+            ctx.fillStyle = 'orange';
+            enemyBullets.forEach(bullet => {
+                ctx.fillRect(bullet.x - 2, bullet.y - 2, 4, 4);
+            });
+        }
+
+        function drawStars() {
+            ctx.fillStyle = 'white';
+            stars.forEach(star => {
+                ctx.fillRect(star.x, star.y, 2, 2);
+            });
+        }
+
+        function drawBoss() {
+            if (boss) {
+                ctx.fillStyle = 'purple';
+                ctx.beginPath();
+                ctx.moveTo(boss.x, boss.y - 30);
+                ctx.lineTo(boss.x + 20, boss.y);
+                ctx.lineTo(boss.x, boss.y + 30);
+                ctx.lineTo(boss.x - 20, boss.y);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+        }
+
+        function update() {
+            if (gameIsOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawStars();
+            drawPlayer();
+            drawBullets();
+            drawEnemies();
+            drawEnemyBullets();
+            drawBoss();
+            drawScore();
+
+            bullets = bullets.filter(bullet => bullet.y > 0);
+            bullets.forEach(bullet => {
+                bullet.y -= 10;
+            });
+
+            enemies = enemies.filter(enemy => enemy.y < canvas.height);
+            enemies.forEach(enemy => {
+                enemy.y += 2;
+                if (Math.random() < 0.02) {
+                    enemyBullets.push({ x: enemy.x, y: enemy.y + 10 });
+                }
+            });
+
+            enemyBullets = enemyBullets.filter(bullet => bullet.y < canvas.height);
+            enemyBullets.forEach(bullet => {
+                bullet.y += 5;
+            });
+
+            if (Math.random() < 0.05 && enemies.length < 10) {
+                enemies.push({ x: Math.random() * canvas.width, y: 0 });
+            }
+
+            stars = stars.filter(star => star.y < canvas.height);
+            if (Math.random() < 0.1) {
+                stars.push({ x: Math.random() * canvas.width, y: 0 });
+            }
+            stars.forEach(star => {
+                star.y += 1;
+            });
+
+            // 衝突判定
+            bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (Math.abs(bullet.x - enemy.x) < 10 && Math.abs(bullet.y - enemy.y) < 10) {
+                        bullets.splice(bulletIndex, 1);
+                        enemies.splice(enemyIndex, 1);
+                        score += 10;
+                        enemiesDestroyed++;
+                    }
+                });
+            });
+
+            enemyBullets.forEach((bullet, index) => {
+                if (Math.abs(bullet.x - player.x) < 10 && Math.abs(bullet.y - player.y) < 10) {
+                    gameOver();
+                }
+            });
+
+            if (enemiesDestroyed >= 50 && !boss) {
+                boss = { x: canvas.width / 2, y: 100, health: 30 };
+            }
+
+            if (boss) {
+                if (Math.random() < 0.1) {
+                    for (let i = 0; i < 8; i++) {
+                        let angle = (Math.PI * 2 / 8) * i;
+                        enemyBullets.push({
+                            x: boss.x + Math.cos(angle) * 20,
+                            y: boss.y + Math.sin(angle) * 20,
+                            vx: Math.cos(angle) * 3,
+                            vy: Math.sin(angle) * 3
+                        });
+                    }
+                }
+
+                bullets.forEach((bullet, bulletIndex) => {
+                    if (Math.abs(bullet.x - boss.x) < 30 && Math.abs(bullet.y - boss.y) < 30) {
+                        bullets.splice(bulletIndex, 1);
+                        boss.health--;
+                        score += 20;
+                        if (boss.health <= 0) {
+                            boss = null;
+                            congratulations();
+                        }
+                    }
+                });
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function gameOver() {
+            gameIsOver = true;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function congratulations() {
+            gameIsOver = true;
+            document.getElementById('congratulations').style.display = 'block';
+            document.getElementById('congratulations').innerHTML += `<br>最終スコア: ${score}`;
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if (!gameIsOver) {
+                player.x = e.clientX;
+            }
+        });
+
+        document.addEventListener('click', () => {
+            if (!gameIsOver) {
+                bullets.push({ x: player.x, y: player.y - 10 });
+            }
+        });
+
+        update();
+    </script>
+</body>
+</html>
